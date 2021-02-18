@@ -1,4 +1,13 @@
-const { userJoin, userLeave, getUsers } = require('./utils/users');
+const { Game, inputGame, getGame } = require('./utils/games');
+const {
+  userJoin,
+  userLeave,
+  getUsers,
+  updateInGameStatus,
+  getLookingToPlayUser,
+  getCurrentUser,
+} = require('./utils/users');
+const { IDGen } = require('./utils/utils');
 
 const app = require('express')();
 const http = require('http').createServer(app);
@@ -24,7 +33,44 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('message', `${user.username} has joined the chat`);
   });
 
-  socket.emit('roomUsers', getUsers());
+  socket.on('message', ({ value, id }) => {
+    io.to(id).emit('chatMessage', value);
+  });
+
+  socket.on('lookingToPlay', ({ username }) => {
+    const userLookingToPlay = getLookingToPlayUser();
+    const roomID = IDGen();
+
+    if (!userLookingToPlay) {
+      updateInGameStatus(socket.id, 'LOOKING_TO_PLAY');
+
+      socket.emit('statusSearch', { status: 'LOOKING_FOR_GAME' });
+      socket.join(roomID);
+    } else {
+      const game = new Game(
+        socket.id,
+        username,
+        userLookingToPlay.id,
+        userLookingToPlay.username,
+        roomID
+      );
+      inputGame(game);
+      socket.join(roomID);
+      socket.emit('statusSearch', { status: 'FOUND_GAME', game });
+      socket
+        .to(userLookingToPlay.id)
+        .emit('statusSearch', { status: 'FOUND_GAME', game });
+    }
+  });
+
+  socket.on('move', ({ id, fen, move }) => {
+    const game = getGame(id);
+    console.log(game);
+    game.moves.push(move);
+    game.fen = fen;
+    game.turn = game.turn === 'white' ? 'black' : 'white';
+    io.to(id).emit('chatMessage', 'A move was played');
+  });
 
   socket.on('disconnect', () => {
     console.log('A client has disconnected');
