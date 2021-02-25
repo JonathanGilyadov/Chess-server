@@ -5,6 +5,7 @@ const {
 	createGame,
 	getPendingGame,
 	joinPendingGame,
+	updateGameDetails,
 } = require('./utils/games');
 const {
 	userJoin,
@@ -14,7 +15,7 @@ const {
 	getLookingToPlayUser,
 	getCurrentUser,
 } = require('./utils/users');
-const { IDGen } = require('./utils/utils');
+const { IDGen, colorDecider } = require('./utils/utils');
 
 const app = require('express')();
 const http = require('http').createServer(app);
@@ -40,8 +41,9 @@ io.on('connection', (socket) => {
 		socket.broadcast.emit('message', `${user.username} has joined the chat`);
 	});
 
-	socket.on('message', ({ value, id }) => {
-		io.to(id).emit('chatMessage', value);
+	socket.on('message', ({ value, roomID }) => {
+		console.log(roomID);
+		io.to(roomID).emit('chatMessage', value);
 	});
 
 	socket.on('lookingToPlay', ({ username }) => {
@@ -53,6 +55,7 @@ io.on('connection', (socket) => {
 		const thisPlayerData = {
 			username,
 			id,
+			color: null, // We don't yet know the color
 		};
 
 		// Either joining or creating a game
@@ -60,8 +63,14 @@ io.on('connection', (socket) => {
 			// Creating room id here so socket can join it later
 			const roomID = IDGen();
 
+			// Color setting
+			const color = colorDecider();
+
+			thisPlayerData.color = color;
 			// Updating user status
 			updateInGameStatus(id, 'IN_QUEUE', roomID);
+
+			// Creating a game with only one user
 			createGame(thisPlayerData, null, roomID);
 
 			// Sending status back to the client
@@ -72,6 +81,10 @@ io.on('connection', (socket) => {
 		} else {
 			// Getting game id
 			const gameID = pendingGame.id;
+
+			// Color setter
+			const color = pendingGame.playerOne.color === 'white' ? 'black' : 'white';
+			thisPlayerData.color = color;
 
 			// Joining pending game
 			// State wise
@@ -97,14 +110,15 @@ io.on('connection', (socket) => {
 
 	socket.on('move', ({ id, fen, move }) => {
 		const game = getGame(id);
-		console.log(game);
+
 		game.moves.push(move);
 		game.fen = fen;
 		game.turn = game.turn === 'white' ? 'black' : 'white';
-
 		const message = 'A move as been played';
 
-		io.to(id).emit('chatMessage', { message, move, fen });
+		console.log(game);
+
+		io.to(id).emit('move', { message, move, fen, turn: game.turn });
 	});
 
 	socket.on('disconnect', () => {

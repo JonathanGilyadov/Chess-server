@@ -1,7 +1,13 @@
 const decider = () => Math.random() < 0.5;
 
-const IDGen = () => {
-  return '_' + Math.random().toString(36).substr(2, 9);
+const colorDecider = () => {
+	const color = decider ? 'white' : 'black';
+
+	return color;
 };
 
-module.exports = { decider, IDGen };
+const IDGen = () => {
+	return '_' + Math.random().toString(36).substr(2, 9);
+};
+
+module.exports = { colorDecider, IDGen };
